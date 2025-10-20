@@ -6,8 +6,9 @@
     --color-background : #121113 ;
     --color-background-accent: #222725 ;
     --color-text: #EEF1EF ;
-    --color-text-muted: #A9B4C2;
-    --color-accent:#EF798A;
+    --color-text-muted: #F4EBE8;
+    --color-accent:#F90093;
+    --color-accent-secondary: #A45CFF;
 
     --font-inter: "Inter", sans-serif;
     --font-ramport: "Rampart One", sans-serif;
@@ -17,6 +18,7 @@
     --animate-firstT: firstT 3s linear infinite alternate;
     --animate-secondT: secondT 3s linear infinite alternate;
     --animate-thirdT: thirdT 3s linear infinite alternate;
+    --animate-glow: glow 1.5s ease-in-out infinite alternate;
 
   
 }
@@ -78,9 +80,31 @@
     }
 }
 
+@keyframes glow{
+    0%{
+        scale: 1;
+        opacity: 1;
+    }
+    100%{
+        scale: 1.01;
+        opacity: 0.7;
+    }
+}
+
 .bg-grid{
     background-image: 
     linear-gradient(90deg,rgba(255,255,255,0.07) 1px,transparent 1px),
     linear-gradient(0deg, rgba(255,255,255,0.07) 1px,transparent 1px);
     background-size: 20px 20px;
+}
+
+
+.svg{
+    fill: #F90093;
+}
+
+.svg-2{
+    fill: #EEF1EF;
+    transform: rotate(180deg);
+
 }
