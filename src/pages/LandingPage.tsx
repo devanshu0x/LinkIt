@@ -97,9 +97,9 @@ function LandingPage() {
         <span className="font-bold">It</span>?
       </h2>
 
-      <div className="mt-8 px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-3">
-        <div className="bg-text/10 shadow-[2px_2px_4px_3px_rgba(0,0,0,0.4)]  rotate-3 hover:rotate-0 transition-transform duration-300">
-          <div className="h-full -translate-x-2 bg-highlight-accent/90 shadow-[2px_2px_4px_2px_rgba(255,255,255,0.4)]  -translate-y-2 pl-5 pr-2 pt-5 pb-2">
+      <div className="mt-8 px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-7">
+        <div className="bg-highlight-accent/90 shadow-[2px_2px_8px_3px_rgba(249,0,147,0.4)] hover:rotate-3 transition-transform duration-300">
+          <div className="pl-5 pr-2 pt-5 pb-2">
             <h5 className="sm:text-lg font-bold mb-3 ">
               Most platforms use{" "}
               <span className="text-accent-secondary font-extrabold">
@@ -131,7 +131,7 @@ function LandingPage() {
           </div>
         </div>
 
-        <div className="">
+        <div className="border-2 shadow-[-2px_2px_5px_1px_rgba(255,255,255,0.2)] flex flex-col justify-center bg-text/10">
           <FileTransferUsingServer />
         </div>
       </div>
