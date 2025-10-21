@@ -4,10 +4,10 @@ function FileTransferUsingServer() {
     <div className="px-4 pt-8">
       <div className="relative">
         <div className="relative h-30 mb-18">
-        <div className="h-4 w-4 rounded-full bg-text absolute left-0 top-0" />
-        <div className="h-4 w-4 rounded-full bg-text absolute right-0 top-0" />
-        <div className="h-5 w-5 rounded-full bg-text absolute left-[50%] bottom-0"></div>
-        <div className="h-5 w-5 absolute left-[50%] bg-text"></div>
+        <div className="h-4 w-4 rounded-full bg-text hover:bg-accent-secondary duration-300 transition-colors absolute left-0 top-0" />
+        <div className="h-4 w-4 rounded-full bg-text hover:bg-accent-secondary duration-300 transition-colors absolute right-0 top-0" />
+        <div className="h-5 w-5 rounded-full bg-text hover:bg-accent-secondary duration-300 transition-colors absolute left-[50%] bottom-0"></div>
+        <div className="h-5 w-5 absolute left-[50%] bg-text hover:bg-accent-secondary duration-300 transition-colors"></div>
 
         <div className="h-4 w-4 rounded-full bg-accent -z-1 absolute animate-firstT" />
         <div className="h-4 w-4 rounded-full bg-accent -z-1 absolute animate-secondT" />

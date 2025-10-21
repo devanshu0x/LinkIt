@@ -2,13 +2,16 @@
 @import "tailwindcss";
 
 @theme{
-
+   
     --color-background : #121113 ;
     --color-background-accent: #222725 ;
     --color-text: #EEF1EF ;
     --color-text-muted: #F4EBE8;
     --color-accent:#F90093;
     --color-accent-secondary: #A45CFF;
+    --color-highlight-accent: #33001f;
+    --color-highlight-secondary: #2a0a3d;
+    --color-highlight-soft: #1d1c1e;
 
     --font-inter: "Inter", sans-serif;
     --font-ramport: "Rampart One", sans-serif;

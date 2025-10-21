@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom"
 import Background from "./components/Background"
 import LandingPage from "./pages/LandingPage"
 import Dashboard from "./pages/Dashboard"
+import Footer from "./components/Footer"
 
 
 
@@ -15,6 +16,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard/>}/>
         </Routes>
         </div>
+        <Footer/>
     </div>
   )
 }
