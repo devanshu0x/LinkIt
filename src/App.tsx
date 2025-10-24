@@ -3,6 +3,7 @@ import Background from "./components/Background"
 import LandingPage from "./pages/LandingPage"
 import Dashboard from "./pages/Dashboard"
 import Footer from "./components/Footer"
+import Room from "./pages/Room"
 
 
 
@@ -14,6 +15,7 @@ function App() {
           <Routes>
           <Route path="/" element={<LandingPage/>}/>
           <Route path="/dashboard" element={<Dashboard/>}/>
+          <Route path="/room/:roomId" element={<Room/>} />
         </Routes>
         </div>
         <Footer/>

@@ -1,8 +1,11 @@
+import Appbar from "../components/Appbar"
 
 
 function Room() {
   return (
-    <div>Room</div>
+    <div className="my-2 sm:my-4 mx-6 sm:mx-10">
+      <Appbar/>
+    </div>
   )
 }
 
