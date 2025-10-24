@@ -1,4 +1,3 @@
-import React from "react";
 
 function Footer() {
   return (
@@ -20,7 +19,6 @@ function Footer() {
         </svg>
       </a>
 
-      {/* X (Twitter) */}
       <a
         href="https://x.com/dazzlingdark"
         target="_blank"

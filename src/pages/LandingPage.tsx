@@ -2,14 +2,26 @@ import { NavLink } from "react-router-dom";
 import DirectFileTransfer from "../components/DirectFileTransfer";
 import FileTransferUsingServer from "../components/FileTransferUsingServer";
 import {
+  ArrowBigRight,
   ArrowLeftRight,
   CircleUserRound,
+  Cpu,
+  EyeOff,
   File,
+  FileUp,
+  Globe,
   Infinity,
+  Layers,
+  Lock,
+  MousePointerClick,
+  Rocket,
+  ServerCrash,
   ShieldBan,
+  ShieldCheck,
   Turtle,
+  Wifi,
+  Zap,
 } from "lucide-react";
-import Footer from "../components/Footer";
 
 function LandingPage() {
   return (
@@ -45,7 +57,7 @@ function LandingPage() {
       {/* Card section */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ">
-        <div className="relative bg-text/10 shadow-[0_0_3px_2px_rgba(255,255,255,0.3)] h-55 md:h-70">
+        <div className="relative bg-text/10 border-2 shadow-[0_0_3px_2px_rgba(255,255,255,0.3)] h-55 md:h-70">
           <DirectFileTransfer />
           <div className=" max-w-2/3 sm:max-w-1/2 mx-auto text-lg font-bold sm:text-xl md:text-2xl ">
             Directly <span className="text-accent-secondary">transfer</span>{" "}
@@ -66,7 +78,7 @@ function LandingPage() {
             </svg>
           </div>
         </div>
-        <div className="relative bg-accent/10 shadow-[0_0_3px_2px_rgba(249,0,147,0.3)] h-50 md:h-70">
+        <div className="relative bg-accent/10 border-2 border-accent shadow-[0_0_3px_2px_rgba(249,0,147,0.3)] h-50 md:h-70">
           <div className="max-w-2/3 sm:max-w-1/2 mx-auto text-lg font-bold sm:text-xl md:text-2xl pt-12 sm:pt-16 ">
             Because your{" "}
             <span className="text-accent-secondary">files shouldn't go</span>{" "}
@@ -98,7 +110,7 @@ function LandingPage() {
       </h2>
 
       <div className="mt-8 px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-7">
-        <div className="bg-highlight-accent/90 shadow-[2px_2px_8px_3px_rgba(249,0,147,0.4)] hover:rotate-3 transition-transform duration-300">
+        <div className="bg-accent/10 border-2 border-accent shadow-[2px_2px_8px_3px_rgba(249,0,147,0.4)] hover:rotate-3 transition-transform duration-300">
           <div className="pl-5 pr-2 pt-5 pb-2">
             <h5 className="sm:text-lg font-bold mb-3 ">
               Most platforms use{" "}
@@ -131,49 +143,114 @@ function LandingPage() {
           </div>
         </div>
 
-        <div className="border-2 shadow-[-2px_2px_5px_1px_rgba(255,255,255,0.2)] flex flex-col justify-center bg-text/10">
-          <FileTransferUsingServer />
+        <div className="border-2 shadow-[-2px_2px_5px_1px_rgba(255,255,255,0.2)] bg-text/10 px-4 py-3 text-center">
+          <span className="font-bold">
+            Server and database act as middleman
+          </span>
+          <div className="py-9">
+            <FileTransferUsingServer />
+          </div>
         </div>
       </div>
 
-      <div className="bg-highlight-soft -rotate-2 hover:rotate-0 transition-transform duration-300 max-w-xl mx-auto ">
-        <div className="bg-highlight-secondary px-4 sm:px-6 py-6 md:mt-8 translate-x-2 translate-y-2 shadow-[-2px_-2px_4px_2px_rgba(255,255,255,0.4)]">
-          <h5 className="text-center text-lg sm:text-xl font-bold">
-            What We Offer?
-          </h5>
-          <ul className="space-y-2 pt-4">
-            <li className="flex items-center gap-3">
-              {" "}
-              <span className="p-2 rounded-lg bg-accent-secondary">
-                <ArrowLeftRight />
-              </span>{" "}
-              Direct peer-to-peer file transfer powered by WebRTC
-            </li>
-            <li className="flex items-center gap-3">
-              {" "}
-              <span className="p-2 rounded-lg bg-accent-secondary">
-                <CircleUserRound />
-              </span>
-              No sign-ups, no servers, just instant sharing
-            </li>
-            <li className="flex items-center gap-3">
-              {" "}
-              <span className="p-2 rounded-lg bg-accent-secondary">
-                <Infinity />
-              </span>
-              Unlimited file size, limited only by your connection
-            </li>
-          </ul>
-        </div>
-      </div>
+      <div className="bg-black/40 shadow-[0_0_5px_2px_rgba(255,255,255,0.4)] my-10  border px-4 py-5">
+        <h5 className="text-center mt-4 mb-8 text-xl sm:text-2xl md:text-3xl font-bold">
+          What We Offer?
+        </h5>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+         
+          <div>
+            <h4 className="text-lg sm:text-xl md:text-2xl justify-center font-bold text-accent-secondary mt-3 flex items-center gap-2">
+              <Zap className="text-accent-secondary" /> Performance
+            </h4>
+            <ul className="space-y-3 pt-2 text-md sm:text-lg">
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <Rocket />
+                </span>
+                Instant connection, transfer starts the moment your peer
+                connects
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <Wifi />
+                </span>
+                Real-time delivery, your internet speed is your transfer speed
+              </li>
+            </ul>
+          </div>
 
-      <div className="mt-10 flex justify-center items-center flex-col gap-3">
-        <NavLink
-          to={"/dashboard"}
-          className="px-5 sm:px-8 py-3 bg-accent hover:bg-accent-secondary shadow-[2px_2px_5px_2px_rgba(249,0,147,0.4)] hover:shadow-[3px_3px_5px_3px_rgba(164,92,255,0.4)] rounded-lg cursor-pointer font-bold sm:font-extrabold border border-accent/20 hover:border-accent-secondary/20 hover:rotate-2 transition-all duration-300"
-        >
-          Try Now
-        </NavLink>
+         
+          <div>
+            <h4 className="text-lg sm:text-xl md:text-2xl justify-center font-bold text-accent-secondary mt-3 flex items-center gap-2">
+              <ShieldCheck className="text-accent-secondary" /> Privacy &
+              Security
+            </h4>
+            <ul className="space-y-3 pt-2 text-md sm:text-lg">
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <Lock />
+                </span>
+                Files never touch any server, only between you and your peer
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <EyeOff />
+                </span>
+                No logs, no tracking, no data collection, total privacy
+              </li>
+            </ul>
+          </div>
+
+
+          <div>
+            <h4 className="text-lg sm:text-xl md:text-2xl justify-center font-bold text-accent-secondary mt-3 flex items-center gap-2">
+              <MousePointerClick className="text-accent-secondary" /> Simplicity
+            </h4>
+            <ul className="space-y-3 pt-2 text-md sm:text-lg">
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <FileUp />
+                </span>
+                Just drag, drop, and share, no accounts or forms needed
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <Globe />
+                </span>
+                Works on any browser and any device, no installs required
+              </li>
+            </ul>
+          </div>
+          <div >
+            <h4 className="text-lg sm:text-xl md:text-2xl justify-center font-bold text-accent-secondary mt-3 flex items-center gap-2">
+              <Infinity className="text-accent-secondary" /> Freedom
+            </h4>
+            <ul className="space-y-3 pt-2 text-md sm:text-lg">
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <ServerCrash />
+                </span>
+                No upload or file size limits, share anything, anytime
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="p-2 rounded-lg bg-accent-secondary">
+                  <ArrowBigRight />
+                </span>
+                You’re in control — your browser is your own secure server
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-14 mb-4 flex justify-center items-center flex-col gap-3">
+          <NavLink
+            to={"/dashboard"}
+            className="px-5 sm:px-8 py-3 bg-accent hover:bg-accent-secondary shadow-[2px_2px_5px_2px_rgba(249,0,147,0.4)] hover:shadow-[3px_3px_5px_3px_rgba(164,92,255,0.4)] rounded-lg cursor-pointer font-bold sm:font-extrabold border border-accent/20 hover:border-accent-secondary/20 hover:rotate-2 transition-all duration-300"
+          >
+            Try Now
+          </NavLink>
+        </div>
       </div>
     </div>
   );

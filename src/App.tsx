@@ -8,9 +8,9 @@ import Footer from "./components/Footer"
 
 function App() {
   return (
-    <div className="text-text font-inter ">
+    <div className="text-text font-inter min-h-screen flex flex-col">
         <Background/>
-        <div className="overflow-x-clip relative">
+        <div className="overflow-x-clip relative flex-grow">
           <Routes>
           <Route path="/" element={<LandingPage/>}/>
           <Route path="/dashboard" element={<Dashboard/>}/>

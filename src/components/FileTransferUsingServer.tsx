@@ -1,7 +1,7 @@
 
 function FileTransferUsingServer() {
   return (
-    <div className="px-4 pt-8">
+    <div className="px-4 ">
       <div className="">
         <div className="relative h-30">
         <div className="h-4 w-4 rounded-full bg-text hover:bg-accent-secondary duration-300 transition-colors absolute left-0 top-0" />
