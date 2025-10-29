@@ -3,15 +3,11 @@ import DirectFileTransfer from "../components/DirectFileTransfer";
 import FileTransferUsingServer from "../components/FileTransferUsingServer";
 import {
   ArrowBigRight,
-  ArrowLeftRight,
-  CircleUserRound,
-  Cpu,
   EyeOff,
   File,
   FileUp,
   Globe,
   Infinity,
-  Layers,
   Lock,
   MousePointerClick,
   Rocket,

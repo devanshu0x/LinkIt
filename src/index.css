@@ -1,8 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Bungee+Inline&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Rampart+One&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme{
-   
+
     --color-background : #121113 ;
     --color-background-accent: #222725 ;
     --color-text: #EEF1EF ;
@@ -23,7 +25,6 @@
     --animate-thirdT: thirdT 3s linear infinite alternate;
     --animate-glow: glow 1.5s ease-in-out infinite alternate;
 
-  
 }
 
 @keyframes firstT {
@@ -73,7 +74,6 @@
     }
 }
 
-
 @keyframes movex {
     0%{
         left: 1rem;
@@ -101,7 +101,6 @@
     background-size: 20px 20px;
 }
 
-
 .svg{
     fill: #F90093;
 }
@@ -111,3 +110,4 @@
     transform: rotate(180deg);
 
 }
+
