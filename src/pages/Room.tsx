@@ -3,11 +3,16 @@ import Appbar from "../components/Appbar"
 import { useNavigate, useParams } from "react-router-dom"
 import axios from "axios"
 import toast from "react-hot-toast"
+import { io } from "socket.io-client"
 const BACKEND_URL= import.meta.env.VITE_BACKEND_URL
+
+
+
 
 function Room() {
   const navigate=useNavigate();
   const {roomId}= useParams();
+  
   useEffect(()=>{
     async function checkValidRoom(){
       try{
@@ -24,7 +29,28 @@ function Room() {
       
     }
     checkValidRoom();
-  },[])
+
+    const socket= io(BACKEND_URL,{
+    withCredentials:true
+    })
+
+    socket.on("user-joined",(data)=>{
+        toast.success("Another User joined");
+        console.log(data);
+        socket.emit("peer-connected");
+    })
+
+    socket.on("peer-connected",()=>{
+      toast.success("Connected to peer successfully");
+    })
+
+    
+
+    return ()=>{
+      socket.disconnect();
+    }
+
+  },[roomId])
   return (
     <div className="my-2 sm:my-4 mx-6 sm:mx-10">
       <Appbar/>
