@@ -22,7 +22,7 @@ function Dashboard() {
       await axios.get(`${BACKEND_URL}/join/${roomId}`,{withCredentials:true});
       navigate(`/room/${roomId}`);
     }
-    catch(e){
+    catch(e:any){
       if(axios.isAxiosError(e)){
         toast.error(e.response?.data.error);
       }

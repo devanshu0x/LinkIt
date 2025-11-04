@@ -17,7 +17,7 @@ function Room() {
     async function checkValidRoom(){
       try{
         await axios.get(`${BACKEND_URL}/verify/${roomId}`,{withCredentials:true});
-      }catch(e){
+      }catch(e:any){
         if(axios.isAxiosError(e)){
           toast.error(e.response?.data.error);
         }
