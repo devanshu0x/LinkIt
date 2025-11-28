@@ -145,7 +145,7 @@ function Room() {
     };
 
     
-    socket.on("user-joined", (payload) => {
+    socket.on("user-joined", () => {
       isPoliteRef.current=false;
       try {
         if (!dataChannelRef.current && peerRef.current) {
