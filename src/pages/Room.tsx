@@ -79,12 +79,15 @@ function Room() {
     // capture data channel
     peer.ondatachannel = (event) => {
       const receiveChannel = event.channel;
+      receiveChannel.binaryType= "arraybuffer";
+      dataChannelRef.current=receiveChannel;
+
       const receivedChunks: BlobPart[] = [];
       let fileMetadata: FileMetadata | null = null;
 
       receiveChannel.onmessage = (e) => {
         // First message is metadata
-        if (!fileMetadata && typeof e.data === "string" && e.data.startsWith("{")) {
+        if (!fileMetadata && typeof e.data === "string") {
           try {
             fileMetadata = JSON.parse(e.data);
           } catch (err) {
@@ -110,43 +113,173 @@ function Room() {
           receivedChunks.push(e.data);
         }
       };
+
+      receiveChannel.onopen = () => {
+        setIsConnected(true);
+        setConnectionState("connected");
+        toast.success("Data channel opened by remote!");
+      };
+
+      receiveChannel.onclose = () => {
+        setIsConnected(false);
+        setConnectionState("failed");
+      };
+
+      receiveChannel.onerror = (err) => {
+        console.error("Receive channel error:", err);
+      };
+  
+    };
+
+    peer.onnegotiationneeded = async () => {
+      try {
+        makingOfferRef.current = true;
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit("offer", peer.localDescription);
+      } catch (err) {
+        console.error("Error during negotiationneeded:", err);
+      } finally {
+        makingOfferRef.current = false;
+      }
     };
 
     
-    socket.on("user-joined", async () => {
+    socket.on("user-joined", (payload) => {
       isPoliteRef.current=false;
-      const dataChannel = peer.createDataChannel("fileTransfer");
-      dataChannelRef.current = dataChannel;
+      try {
+        if (!dataChannelRef.current && peerRef.current) {
+          const dc = peerRef.current.createDataChannel("fileTransfer");
+          setupLocalDataChannel(dc);
+          dataChannelRef.current = dc;
+          // `onnegotiationneeded` will trigger after creating data channel
+        }
+      } catch (err) {
+        console.error("Failed to create data channel on user-joined:", err);
+      }
+    });
 
-      dataChannel.onopen = () => {
+    socket.on("offer", async (offer: RTCSessionDescriptionInit) => {
+      const polite = isPoliteRef.current;
+      const peer = peerRef.current;
+      if (!peer) return;
+
+      const offerCollision =
+        offer.type === "offer" &&
+        (makingOfferRef.current || peer.signalingState !== "stable");
+
+      ignoreOfferRef.current = !polite && offerCollision;
+      if (ignoreOfferRef.current) {
+        console.warn("Offer collision detected and ignored (impolite)");
+        return;
+      }
+
+      try {
+        await peer.setRemoteDescription(new RTCSessionDescription(offer));
+
+        // flush any queued ICE candidates we received earlier
+        flushIceQueueIfAny();
+
+        if (offer.type === "offer") {
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          socket.emit("answer", peer.localDescription);
+        }
+      } catch (err) {
+        console.error("Error handling offer:", err);
+      }
+    });
+
+    socket.on("answer", async (answer: RTCSessionDescriptionInit) => {
+      const peer = peerRef.current;
+      if (!peer) return;
+      if (ignoreOfferRef.current) return;
+
+      try {
+        await peer.setRemoteDescription(new RTCSessionDescription(answer));
+        // remoteDescription set -> flush queued candidates
+        flushIceQueueIfAny();
+      } catch (err) {
+        console.error("Error handling answer:", err);
+      }
+    });
+
+    socket.on("ice-candidate", async (candidate: RTCIceCandidateInit) => {
+      const peer = peerRef.current;
+      if (!peer) return;
+
+      // If remoteDescription is not set yet, queue candidate
+      if (!peer.remoteDescription || peer.remoteDescription.type === null) {
+        iceQueueRef.current.push(candidate);
+      } else {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error("addIceCandidate error:", err);
+        }
+      }
+    });
+
+    function flushIceQueueIfAny() {
+      const peer = peerRef.current;
+      if (!peer) return;
+      const queue = iceQueueRef.current.splice(0, iceQueueRef.current.length);
+      queue.forEach(async (c) => {
+        try {
+          await peer.addIceCandidate(new RTCIceCandidate(c));
+        } catch (err) {
+          console.error("Error applying queued ICE candidate:", err);
+        }
+      });
+    }
+
+    function setupLocalDataChannel(dc: RTCDataChannel) {
+      dc.binaryType = "arraybuffer";
+      dc.onopen = () => {
         setIsConnected(true);
         setConnectionState("connected");
         toast.success("Connected to peer!");
       };
+      dc.onclose = () => {
+        setIsConnected(false);
+        setConnectionState("failed");
+      };
+      dc.onerror = (err) => {
+        console.error("DataChannel error:", err);
+      };
 
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      socket.emit("offer", offer);
-    });
+     
+      const receivedChunks: BlobPart[] = [];
+      let fileMetadata: FileMetadata | null = null;
 
-    socket.on("offer", async (offer) => {
-      await peer.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit("answer", answer);
-    });
+      dc.onmessage = (e) => {
+        if (!fileMetadata && typeof e.data === "string" && e.data.startsWith("{")) {
+          try {
+            fileMetadata = JSON.parse(e.data);
+          } catch (err) {
+            console.error("Failed to parse metadata:", err);
+          }
+          return;
+        }
 
-    socket.on("answer", async (answer) => {
-      await peer.setRemoteDescription(new RTCSessionDescription(answer));
-    });
+        if (e.data === "EOF") {
+          const blob = new Blob(receivedChunks, { type: fileMetadata?.type || "" });
+          const file = new File([blob], fileMetadata?.name || "received_file", {
+            type: fileMetadata?.type || "",
+          }) as ReceivedFile;
+          file.receivedAt = new Date();
 
-    socket.on("ice-candidate", async (candidate) => {
-      try {
-        await peer.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        console.error(err);
-      }
-    });
+          setReceivedFiles((prev) => [...prev, file]);
+          toast.success(`Received: ${file.name}`);
+
+          // Reset
+          receivedChunks.length = 0;
+          fileMetadata = null;
+        } else {
+          receivedChunks.push(e.data);
+        }
+      };
+    }
 
     return () => {
       socket.disconnect();
@@ -155,13 +288,13 @@ function Room() {
   }, [roomId, navigate]);
 
   const sendFile = (file: File) => {
-    if (!dataChannelRef.current) {
+    const channel = dataChannelRef.current;
+    if (!channel || channel.readyState !== "open") {
       toast.error("Connection not ready");
       return;
     }
 
-    const channel = dataChannelRef.current;
-    const chunkSize = 16 * 1024; // 16KB
+    const chunkSize = 16 * 1024; 
     const reader = new FileReader();
     let offset = 0;
 
@@ -175,21 +308,72 @@ function Room() {
       size: file.size,
       type: file.type,
     };
-    channel.send(JSON.stringify(metadata));
+
+    try {
+      channel.send(JSON.stringify(metadata));
+    } catch (err) {
+      console.error("Failed to send metadata:", err);
+      toast.error("Failed to send metadata");
+      setIsUploading(false);
+      return;
+    }
+
+    // wait when bufferedAmount is high
+    const BUFFERED_HIGH = 4 * 1024 * 1024; // 4MB
 
     reader.onload = (event) => {
       const buffer = event.target?.result as ArrayBuffer;
-      channel.send(buffer);
+
+      // wait for bufferedAmount to be low enough before sending
+      if (channel.bufferedAmount > BUFFERED_HIGH) {
+        // suspend sending until bufferedamountlow fired or polls
+        const onBufferedLow = () => {
+          channel.removeEventListener("bufferedamountlow", onBufferedLow);
+          try {
+            channel.send(buffer);
+          } catch (e) {
+            console.error("Error sending chunk after buffer low:", e);
+          }
+        };
+        // set threshold and attach handler 
+        try {
+          channel.bufferedAmountLowThreshold = 64 * 1024; // 64KB
+          channel.addEventListener("bufferedamountlow", onBufferedLow);
+        } catch (e) {
+          // polling until bufferedAmount is below threshold
+          const interval = setInterval(() => {
+            if (channel.bufferedAmount <= BUFFERED_HIGH) {
+              clearInterval(interval);
+              try {
+                channel.send(buffer);
+              } catch (err) {
+                console.error("Error sending buffer after poll:", err);
+              }
+            }
+          }, 50);
+        }
+      } else {
+        try {
+          channel.send(buffer);
+        } catch (err) {
+          console.error("Failed to send chunk:", err);
+          toast.error("Failed to send chunk");
+        }
+      }
+
       offset += buffer.byteLength;
-      
-      // Update progress
+
       const progress = Math.round((offset / file.size) * 100);
       setUploadProgress(progress);
 
       if (offset < file.size) {
         readSlice(offset);
       } else {
-        channel.send("EOF");
+        try {
+          channel.send("EOF");
+        } catch (err) {
+          console.error("Failed to send EOF:", err);
+        }
         setIsUploading(false);
         setUploadProgress(0);
         setCurrentFileName("");
