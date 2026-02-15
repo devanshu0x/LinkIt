@@ -42,8 +42,7 @@ function Dashboard() {
           Create or join room to start sharing files
         </h4>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 my-8 sm:my-12 ">
-          <div className="border py-4 px-3 sm:px-5 relative bg-black/30 min-h-62 md:h-72 flex flex-col">
-            <img src="bg2.svg" className="absolute left-0 right-0 bottom-0" />
+          <div className="border py-4 px-3 sm:px-5 relative bg-black/30 min-h-62 md:h-72 flex flex-col bg-[url('/bg2.svg')] bg-no-repeat bg-bottom bg-cover">
               <h4 className="text-center text-2xl sm:text-3xl text-accent font-bold">
                 Create Room
               </h4>
@@ -58,12 +57,7 @@ function Dashboard() {
              
             </div>
           </div>
-          <div className="border py-4 px-3 sm:px-5 relative bg-black/30 min-h-62 md:h-72 flex flex-col">
-            <img
-              src="bg1.svg"
-              alt=""
-              className="absolute left-0 right-0 bottom-0"
-            />
+          <div className="border py-4 px-3 sm:px-5 relative bg-black/30 min-h-62 md:h-72 flex flex-col bg-[url('/bg1.svg')] bg-no-repeat bg-bottom bg-cover">
             <h4 className="text-center text-2xl sm:text-3xl text-accent-secondary font-bold">
               Join Room
             </h4>
