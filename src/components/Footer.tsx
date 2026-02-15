@@ -20,7 +20,7 @@ function Footer() {
       </a>
 
       <a
-        href="https://x.com/dazzlingdark"
+        href="https://x.com/devanshu_twt"
         target="_blank"
         rel="noopener noreferrer"
         className="text-text hover:text-accent transition"
