@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Link2, CheckCircle2, XCircle, Loader2, Copy, Check} from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Link2, CheckCircle2, XCircle, Loader2, Copy, Check } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import { ReceivedFiles } from "../components/ReceivedFiles";
 import { UploadFiles } from "../components/UploadFiles";
 
@@ -13,17 +13,36 @@ export interface FileMetadata {
   name: string;
   size: number;
   type: string;
+  totalChunks: number;
+  chunkSize: number;
 }
 
 export interface ReceivedFile extends File {
   receivedAt?: Date;
 }
 
+/** Chunk protocol message types sent over the DataChannel */
+export type DCMessage =
+  | { type: "file-meta"; transferId: string; name: string; size: number; mimeType: string; totalChunks: number; chunkSize: number }
+  | { type: "chunk"; transferId: string; chunkIndex: number }
+  | { type: "eof"; transferId: string }
+  | { type: "resume-request"; transferId: string }
+  | { type: "resume-skip"; transferId: string; receivedChunks: number[] };
+
+/** Tracks an incoming file transfer on the receiver side */
+interface IncomingTransfer {
+  transferId: string;
+  meta: FileMetadata;
+  chunks: Map<number, ArrayBuffer>;
+  nextExpectedMessage: "header" | "binary";
+  pendingChunkIndex: number;
+}
+
 function Room() {
   const navigate = useNavigate();
   const { roomId } = useParams();
 
-  const socketRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const isPoliteRef = useRef<boolean>(true);
@@ -31,16 +50,160 @@ function Room() {
   const ignoreOfferRef = useRef<boolean>(false);
   const iceQueueRef = useRef<RTCIceCandidateInit[]>([]);
 
+  // Incoming transfers keyed by transferId
+  const incomingTransfersRef = useRef<Map<string, IncomingTransfer>>(new Map());
+
   const [isConnected, setIsConnected] = useState(false);
   const [receivedFiles, setReceivedFiles] = useState<ReceivedFile[]>([]);
   const [copied, setCopied] = useState(false);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "failed">("connecting");
 
+  // ── DataChannel message handler (shared by both local and remote DC) ──
+
+  const handleDCMessage = useCallback(
+    (e: MessageEvent) => {
+      const transfers = incomingTransfersRef.current;
+      const socket = socketRef.current;
+
+      // ── String messages: JSON headers, EOF, resume messages ──
+      if (typeof e.data === "string") {
+        let msg: DCMessage;
+        try {
+          msg = JSON.parse(e.data);
+        } catch {
+          console.error("Failed to parse DC message:", e.data);
+          return;
+        }
+
+        if (msg.type === "file-meta") {
+          // A new file transfer is starting
+          const transfer: IncomingTransfer = {
+            transferId: msg.transferId,
+            meta: {
+              name: msg.name,
+              size: msg.size,
+              type: msg.mimeType,
+              totalChunks: msg.totalChunks,
+              chunkSize: msg.chunkSize,
+            },
+            chunks: new Map(),
+            nextExpectedMessage: "header",
+            pendingChunkIndex: -1,
+          };
+          transfers.set(msg.transferId, transfer);
+          return;
+        }
+
+        if (msg.type === "chunk") {
+          // Next binary message is the data for this chunk
+          const transfer = transfers.get(msg.transferId);
+          if (transfer) {
+            transfer.nextExpectedMessage = "binary";
+            transfer.pendingChunkIndex = msg.chunkIndex;
+          }
+          return;
+        }
+
+        if (msg.type === "eof") {
+          const transfer = transfers.get(msg.transferId);
+          if (!transfer) return;
+
+          // Assemble the file from chunks in order
+          const orderedChunks: ArrayBuffer[] = [];
+          for (let i = 0; i < transfer.meta.totalChunks; i++) {
+            const chunk = transfer.chunks.get(i);
+            if (chunk) orderedChunks.push(chunk);
+          }
+
+          const blob = new Blob(orderedChunks, { type: transfer.meta.type });
+          const file = new File([blob], transfer.meta.name, {
+            type: transfer.meta.type,
+          }) as ReceivedFile;
+          file.receivedAt = new Date();
+
+          setReceivedFiles((prev) => [...prev, file]);
+          toast.success(`Received: ${file.name}`);
+
+          // Tell the server the transfer is complete
+          socket?.emit("transfer:complete", { transferId: msg.transferId });
+
+          // Clean up
+          transfers.delete(msg.transferId);
+          return;
+        }
+
+        if (msg.type === "resume-request") {
+          // The sender is asking which chunks we already have
+          const transfer = transfers.get(msg.transferId);
+          const dc = dataChannelRef.current;
+          if (transfer && dc && dc.readyState === "open") {
+            const acked = Array.from(transfer.chunks.keys());
+            const resumeMsg: DCMessage = {
+              type: "resume-skip",
+              transferId: msg.transferId,
+              receivedChunks: acked,
+            };
+            dc.send(JSON.stringify(resumeMsg));
+          }
+          return;
+        }
+
+        // resume-skip is handled by UploadFiles (sender side)
+        return;
+      }
+
+      // ── Binary messages: chunk data ──
+      if (e.data instanceof ArrayBuffer) {
+        // Find the transfer that's expecting a binary chunk
+        for (const transfer of transfers.values()) {
+          if (
+            transfer.nextExpectedMessage === "binary" &&
+            transfer.pendingChunkIndex >= 0
+          ) {
+            const chunkIndex = transfer.pendingChunkIndex;
+            transfer.chunks.set(chunkIndex, e.data);
+            transfer.nextExpectedMessage = "header";
+            transfer.pendingChunkIndex = -1;
+
+            // Ack to the server
+            socketRef.current?.emit("transfer:chunk-ack", {
+              transferId: transfer.transferId,
+              chunkIndex,
+            });
+            break;
+          }
+        }
+      }
+    },
+    []
+  );
+
+  // ── Setup local data channel (created by us) ──
+  const setupLocalDataChannel = useCallback(
+    (dc: RTCDataChannel) => {
+      dc.binaryType = "arraybuffer";
+      dc.onopen = () => {
+        setIsConnected(true);
+        setConnectionState("connected");
+        toast.success("Connected to peer!");
+      };
+      dc.onclose = () => {
+        setIsConnected(false);
+        setConnectionState("failed");
+      };
+      dc.onerror = (err) => {
+        console.error("DataChannel error:", err);
+      };
+      dc.onmessage = handleDCMessage;
+    },
+    [handleDCMessage]
+  );
+
   useEffect(() => {
     async function checkValidRoom() {
       try {
         await axios.get(`${BACKEND_URL}/verify/${roomId}`, { withCredentials: true });
-      } catch (e) {
+      } catch {
         toast.error("Invalid room");
         navigate("/dashboard");
       }
@@ -55,7 +218,7 @@ function Room() {
     });
     peerRef.current = peer;
 
-    // connection state
+    // ── Connection state ──
     peer.onconnectionstatechange = () => {
       const state = peer.connectionState;
       if (state === "connected") {
@@ -67,68 +230,35 @@ function Room() {
       }
     };
 
-    // sharing ice candidates
+    // ── ICE candidates ──
     peer.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit("ice-candidate", event.candidate);
       }
     };
 
-    // capture data channel
+    // ── Remote data channel (created by peer) ──
     peer.ondatachannel = (event) => {
       const receiveChannel = event.channel;
-      receiveChannel.binaryType= "arraybuffer";
-      dataChannelRef.current=receiveChannel;
-
-      const receivedChunks: BlobPart[] = [];
-      let fileMetadata: FileMetadata | null = null;
-
-      receiveChannel.onmessage = (e) => {
-        // First message is metadata
-        if (!fileMetadata && typeof e.data === "string") {
-          try {
-            fileMetadata = JSON.parse(e.data);
-          } catch (err) {
-            console.error("Failed to parse metadata:", err);
-          }
-          return;
-        }
-
-        if (e.data === "EOF") {
-          const blob = new Blob(receivedChunks, { type: fileMetadata?.type || "" });
-          const file = new File([blob], fileMetadata?.name || "received_file", {
-            type: fileMetadata?.type || "",
-          }) as ReceivedFile;
-          file.receivedAt = new Date();
-          
-          setReceivedFiles((prev) => [...prev, file]);
-          toast.success(`Received: ${file.name}`);
-          
-          // Reset for next file
-          receivedChunks.length = 0;
-          fileMetadata = null;
-        } else {
-          receivedChunks.push(e.data);
-        }
-      };
+      receiveChannel.binaryType = "arraybuffer";
+      dataChannelRef.current = receiveChannel;
 
       receiveChannel.onopen = () => {
         setIsConnected(true);
         setConnectionState("connected");
         toast.success("Data channel opened by remote!");
       };
-
       receiveChannel.onclose = () => {
         setIsConnected(false);
         setConnectionState("failed");
       };
-
       receiveChannel.onerror = (err) => {
         console.error("Receive channel error:", err);
       };
-  
+      receiveChannel.onmessage = handleDCMessage;
     };
 
+    // ── Negotiation ──
     peer.onnegotiationneeded = async () => {
       try {
         makingOfferRef.current = true;
@@ -142,29 +272,73 @@ function Room() {
       }
     };
 
-    
-    socket.on("user-joined", () => {
-      isPoliteRef.current=false;
+    // ── Helper: create DataChannel and begin negotiation ──
+
+    function initiateConnection() {
+      const p = peerRef.current;
+      if (!p || dataChannelRef.current) return;
+
+      console.log("[webrtc] Initiating connection — creating DataChannel");
+      isPoliteRef.current = false; // We are the initiator (impolite)
+
       try {
-        if (!dataChannelRef.current && peerRef.current) {
-          const dc = peerRef.current.createDataChannel("fileTransfer");
-          setupLocalDataChannel(dc);
-          dataChannelRef.current = dc;
-          // `onnegotiationneeded` will trigger after creating data channel
-        }
+        const dc = p.createDataChannel("fileTransfer");
+        setupLocalDataChannel(dc);
+        dataChannelRef.current = dc;
       } catch (err) {
-        console.error("Failed to create data channel on user-joined:", err);
+        console.error("Failed to create data channel:", err);
+      }
+    }
+
+    // ── Socket events ──
+
+    // When the server tells us who's already in the room
+    socket.on("room-state", (data: { peerOnline: boolean; memberCount: number }) => {
+      console.log("[room-state]", data);
+      // Tell the server we're ready to receive signaling
+      socket.emit("ready");
+    });
+
+    // When the OTHER peer signals they are ready (their listeners are set up).
+    // If we were already in the room (we are the "initiator"), start the handshake now.
+    socket.on("peer-ready", () => {
+      console.log("[peer-ready] Peer is ready — initiating connection");
+      // Reset any stale DataChannel from a previous peer session
+      if (dataChannelRef.current) {
+        try { dataChannelRef.current.close(); } catch {}
+        dataChannelRef.current = null;
+      }
+      initiateConnection();
+    });
+
+    // Kept for backward-compat / reconnect scenarios:
+    // If a user joins while we're already here, we'll wait for their "peer-ready".
+    socket.on("user-joined", () => {
+      console.log("[user-joined] Peer joined the room, waiting for their ready signal");
+    });
+
+    socket.on("user-disconnected", ({ userId: disconnectedId }: { userId: string }) => {
+      console.log("Peer disconnected:", disconnectedId);
+      toast.error("Peer disconnected. Waiting for reconnection...");
+      setConnectionState("failed");
+      setIsConnected(false);
+      // Clean up stale DataChannel so we can re-initiate when peer reconnects
+      if (dataChannelRef.current) {
+        try { dataChannelRef.current.close(); } catch {}
+        dataChannelRef.current = null;
       }
     });
 
     socket.on("offer", async (offer: RTCSessionDescriptionInit) => {
       const polite = isPoliteRef.current;
-      const peer = peerRef.current;
-      if (!peer) return;
+      const p = peerRef.current;
+      if (!p) return;
+
+      console.log("[signaling] Received offer, polite:", polite, "signalingState:", p.signalingState);
 
       const offerCollision =
         offer.type === "offer" &&
-        (makingOfferRef.current || peer.signalingState !== "stable");
+        (makingOfferRef.current || p.signalingState !== "stable");
 
       ignoreOfferRef.current = !polite && offerCollision;
       if (ignoreOfferRef.current) {
@@ -173,15 +347,14 @@ function Room() {
       }
 
       try {
-        await peer.setRemoteDescription(new RTCSessionDescription(offer));
-
-        // flush any queued ICE candidates we received earlier
+        await p.setRemoteDescription(new RTCSessionDescription(offer));
         flushIceQueueIfAny();
 
         if (offer.type === "offer") {
-          const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
-          socket.emit("answer", peer.localDescription);
+          const answer = await p.createAnswer();
+          await p.setLocalDescription(answer);
+          console.log("[signaling] Sending answer");
+          socket.emit("answer", p.localDescription);
         }
       } catch (err) {
         console.error("Error handling offer:", err);
@@ -189,13 +362,14 @@ function Room() {
     });
 
     socket.on("answer", async (answer: RTCSessionDescriptionInit) => {
-      const peer = peerRef.current;
-      if (!peer) return;
+      const p = peerRef.current;
+      if (!p) return;
       if (ignoreOfferRef.current) return;
 
+      console.log("[signaling] Received answer");
+
       try {
-        await peer.setRemoteDescription(new RTCSessionDescription(answer));
-        // remoteDescription set -> flush queued candidates
+        await p.setRemoteDescription(new RTCSessionDescription(answer));
         flushIceQueueIfAny();
       } catch (err) {
         console.error("Error handling answer:", err);
@@ -203,15 +377,13 @@ function Room() {
     });
 
     socket.on("ice-candidate", async (candidate: RTCIceCandidateInit) => {
-      const peer = peerRef.current;
-      if (!peer) return;
-
-      // If remoteDescription is not set yet, queue candidate
-      if (!peer.remoteDescription || peer.remoteDescription.type === null) {
+      const p = peerRef.current;
+      if (!p) return;
+      if (!p.remoteDescription || p.remoteDescription.type === null) {
         iceQueueRef.current.push(candidate);
       } else {
         try {
-          await peer.addIceCandidate(new RTCIceCandidate(candidate));
+          await p.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (err) {
           console.error("addIceCandidate error:", err);
         }
@@ -219,72 +391,23 @@ function Room() {
     });
 
     function flushIceQueueIfAny() {
-      const peer = peerRef.current;
-      if (!peer) return;
+      const p = peerRef.current;
+      if (!p) return;
       const queue = iceQueueRef.current.splice(0, iceQueueRef.current.length);
       queue.forEach(async (c) => {
         try {
-          await peer.addIceCandidate(new RTCIceCandidate(c));
+          await p.addIceCandidate(new RTCIceCandidate(c));
         } catch (err) {
           console.error("Error applying queued ICE candidate:", err);
         }
       });
     }
 
-    function setupLocalDataChannel(dc: RTCDataChannel) {
-      dc.binaryType = "arraybuffer";
-      dc.onopen = () => {
-        setIsConnected(true);
-        setConnectionState("connected");
-        toast.success("Connected to peer!");
-      };
-      dc.onclose = () => {
-        setIsConnected(false);
-        setConnectionState("failed");
-      };
-      dc.onerror = (err) => {
-        console.error("DataChannel error:", err);
-      };
-
-     
-      const receivedChunks: BlobPart[] = [];
-      let fileMetadata: FileMetadata | null = null;
-
-      dc.onmessage = (e) => {
-        if (!fileMetadata && typeof e.data === "string" && e.data.startsWith("{")) {
-          try {
-            fileMetadata = JSON.parse(e.data);
-          } catch (err) {
-            console.error("Failed to parse metadata:", err);
-          }
-          return;
-        }
-
-        if (e.data === "EOF") {
-          const blob = new Blob(receivedChunks, { type: fileMetadata?.type || "" });
-          const file = new File([blob], fileMetadata?.name || "received_file", {
-            type: fileMetadata?.type || "",
-          }) as ReceivedFile;
-          file.receivedAt = new Date();
-
-          setReceivedFiles((prev) => [...prev, file]);
-          toast.success(`Received: ${file.name}`);
-
-          // Reset
-          receivedChunks.length = 0;
-          fileMetadata = null;
-        } else {
-          receivedChunks.push(e.data);
-        }
-      };
-    }
-
     return () => {
       socket.disconnect();
       peer.close();
     };
-  }, [roomId, navigate]);
-
+  }, [roomId, navigate, handleDCMessage, setupLocalDataChannel]);
 
   const copyRoomId = () => {
     if (roomId) {
@@ -295,13 +418,8 @@ function Room() {
     }
   };
 
-  
-
-
-
   return (
     <div className="min-h-screen">
-      
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
         <div className="mb-8">
@@ -310,15 +428,17 @@ function Room() {
               <h1 className="text-3xl font-bold text-text mb-2">File Transfer Room</h1>
               <p className="text-text-muted opacity-70">Share files securely with peer-to-peer connection</p>
             </div>
-            
+
             {/* Connection Status */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-              connectionState === "connected"
-                ? 'bg-green-500/10 border border-green-500/30' 
-                : connectionState === "connecting"
-                ? 'bg-yellow-500/10 border border-yellow-500/30'
-                : 'bg-red-500/10 border border-red-500/30'
-            }`}>
+            <div
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                connectionState === "connected"
+                  ? "bg-green-500/10 border border-green-500/30"
+                  : connectionState === "connecting"
+                  ? "bg-yellow-500/10 border border-yellow-500/30"
+                  : "bg-red-500/10 border border-red-500/30"
+              }`}
+            >
               {connectionState === "connected" ? (
                 <>
                   <CheckCircle2 className="w-5 h-5 text-green-500" />
@@ -372,11 +492,14 @@ function Room() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Upload Section */}
-          <UploadFiles isConnected={isConnected} dataChannelRef={dataChannelRef} />
+          <UploadFiles
+            isConnected={isConnected}
+            dataChannelRef={dataChannelRef}
+            socketRef={socketRef}
+          />
 
           {/* Received Files Section */}
           <ReceivedFiles receivedFiles={receivedFiles} />
-          
         </div>
       </div>
     </div>
